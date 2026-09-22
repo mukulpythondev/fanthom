@@ -2,8 +2,6 @@
 
 A Fathom-inspired AI meeting intelligence prototype built for the 8x Assignment. Fable focuses on the post-meeting workflow: understanding a conversation, reviewing synchronized notes, tracking decisions and action items, and asking contextual questions about a meeting.
 
-![Fable dashboard](images/homepage.png)
-
 ## Features
 
 - Dashboard with 12 realistic seeded meetings
@@ -66,7 +64,6 @@ src/
   services/       Deterministic meeting AI service
   types/          Shared TypeScript models
 docs/             Product specification
-images/           Product research and reference screenshots
 .agent-logs/      Preserved coding-agent capture logs
 .claude/          Automatic capture hook configuration
 ```
