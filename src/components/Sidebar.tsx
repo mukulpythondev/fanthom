@@ -24,7 +24,7 @@ export function Sidebar() {
             <MessageSquare size={16} className="text-white" />
           </div>
           {!collapsed && (
-            <span className="text-lg font-bold text-fathom-text-primary tracking-tight whitespace-nowrap">Fable</span>
+            <span className="text-lg font-bold text-fathom-text-primary tracking-tight whitespace-nowrap">Fathom</span>
           )}
         </div>
         {!collapsed && currentView === 'meeting' && (
