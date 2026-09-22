@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@source "./";
+@source not "./vite-env.d.ts";
+
+@theme {
+  --color-fathom-bg: #0c0c0f;
+  --color-fathom-surface: #141418;
+  --color-fathom-elevated: #1c1c22;
+  --color-fathom-hover: #24242c;
+  --color-fathom-border: #2a2a34;
+  --color-fathom-border-subtle: #1f1f28;
+  --color-fathom-text-primary: #f0f0f5;
+  --color-fathom-text-secondary: #9090a0;
+  --color-fathom-text-tertiary: #606070;
+  --color-fathom-accent: #2d8cf0;
+  --color-fathom-accent-hover: #4da3f7;
+  --color-fathom-accent-subtle: #1a2d44;
+  --color-fathom-success: #34c759;
+  --color-fathom-success-subtle: #1a3325;
+  --color-fathom-warning: #f5a623;
+  --color-fathom-warning-subtle: #3d2e1a;
+  --color-fathom-purple: #a78bfa;
+  --color-fathom-purple-subtle: #2d2545;
+  --color-fathom-pink: #f472b6;
+  --color-fathom-teal: #2dd4bf;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--color-fathom-bg);
+  color: var(--color-fathom-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-fathom-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fathom-text-tertiary);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--color-fathom-border);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-fathom-accent);
+  cursor: pointer;
+}

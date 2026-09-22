@@ -23,11 +23,6 @@ function getOrCreateSessionId() {
   return id;
 }
 
-const eventType = process.argv[2]; // 'prompt' or 'response'
-const sessionId = getOrCreateSessionId();
-const timestamp = new Date().toISOString();
-const dateStr = new Date().toISOString().split('T')[0];
-
 // Read hook payload from stdin
 let payload = '';
 for await (const chunk of process.stdin) {
@@ -39,7 +34,23 @@ try {
   parsedPayload = JSON.parse(payload);
 } catch (_) { /* ignore */ }
 
-const model = process.env.CLAUDE_MODEL || 'unknown';
+function getTranscriptModel(transcriptPath) {
+  if (!transcriptPath || !existsSync(transcriptPath)) return null;
+  try {
+    const lines = readFileSync(transcriptPath, 'utf-8').trim().split(/\r?\n/).reverse();
+    for (const line of lines) {
+      const entry = JSON.parse(line);
+      if (entry.type === 'assistant' && entry.message?.model) return entry.message.model;
+    }
+  } catch (_) { /* ignore */ }
+  return null;
+}
+
+const eventType = process.argv[2]; // 'prompt' or 'response'
+const sessionId = parsedPayload.session_id || getOrCreateSessionId();
+const timestamp = new Date().toISOString();
+const dateStr = timestamp.split('T')[0];
+const model = process.env.CLAUDE_MODEL || parsedPayload.model || getTranscriptModel(parsedPayload.transcript_path) || 'unknown';
 const tool = 'claude-code';
 const projectName = process.cwd().split(/[\\\/]/).filter(Boolean).pop() || 'unknown';
 
@@ -88,7 +99,7 @@ ${promptText}
 `;
   appendFileSync(sessionLogPath, entry, 'utf-8');
 } else if (eventType === 'response') {
-  const responseText = process.argv[3] || parsedPayload.response || '(no response text captured)';
+  const responseText = parsedPayload.last_assistant_message || parsedPayload.response || process.argv[3] || '(no response text captured)';
 
   const entry = `
 [LOG_ENTRY type=RESPONSE num=${exchangeNum} session=${sessionId}]
@@ -107,6 +118,7 @@ ${responseText}
     const newTotal = parseInt(totalMatch[1]) + 1;
     const updated = currentContent
       .replace(/total_exchanges: \d+/, `total_exchanges: ${newTotal}`)
+      .replace(/^model: .*$/m, `model: ${model}`)
       .replace(/last_prompt_time: .*/, `last_prompt_time: ${timestamp}`);
     writeFileSync(sessionLogPath, updated, 'utf-8');
   }
