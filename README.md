@@ -64,9 +64,14 @@ src/
   services/       Deterministic meeting AI service
   types/          Shared TypeScript models
 docs/             Product specification
+images/           User-captured product research references
 .agent-logs/      Preserved coding-agent capture logs
 .claude/          Automatic capture hook configuration
 ```
+
+## Product Research
+
+The `images/` directory contains screenshots captured while studying the reference platform's information architecture and interaction patterns. They are retained as assignment research material and are not screenshots or runtime assets of this implementation.
 
 ## Demo Flow
 
