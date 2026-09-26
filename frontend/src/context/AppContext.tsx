@@ -118,6 +118,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const toggleActionItem = useCallback(async (meetingId: string, actionId: string) => {
+    const currentAction = selectedMeeting?.id === meetingId
+      ? selectedMeeting.actionItems.find(action => action.id === actionId)
+      : meetings.find(meeting => meeting.id === meetingId)?.actionItems.find(action => action.id === actionId)
+    const completed = currentAction?.status !== 'completed'
+
     setMeetings(prev => prev.map(m => {
       if (m.id !== meetingId) return m
       return {
@@ -137,11 +142,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await toggleActionItemApi(meetingId, actionId, selectedMeeting?.actionItems.find(a => a.id === actionId)?.status !== 'pending')
+      await toggleActionItemApi(meetingId, actionId, completed)
     } catch (err) {
       console.error('Failed to toggle action item:', err)
     }
-  }, [selectedMeeting])
+  }, [meetings, selectedMeeting])
 
   return (
     <AppContext.Provider value={{

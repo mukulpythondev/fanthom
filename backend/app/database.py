@@ -1,19 +1,26 @@
 from sqlalchemy import create_engine, Column, String, Integer, Boolean, Float, ForeignKey, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from dotenv import load_dotenv
 import os, uuid, json
 from datetime import datetime, timezone
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-# Use DIRECT_URL (session-mode pooler, port 5432) for all operations
-DIRECT_URL = os.environ.get(
-    "DIRECT_URL",
-    "postgresql://postgres.xbklmfeuizyjtfyeiibd:t%23C2pm%26.eRVDhjm@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres",
-)
-DATABASE_URL = DIRECT_URL
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"))
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+
+def sqlalchemy_database_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    parts = urlsplit(url)
+    query = [(key, value) for key, value in parse_qsl(parts.query) if key != "pgbouncer"]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 Base = declarative_base()
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False)
+engine = create_engine(sqlalchemy_database_url(DATABASE_URL), pool_pre_ping=True) if DATABASE_URL else None
+SessionLocal = sessionmaker(bind=engine, autoflush=False) if engine else None
 
 
 # ── Models ──────────────────────────────────────────────────────────────
@@ -105,6 +112,8 @@ class Highlight(Base):
 
 # ── Create all tables ────────────────────────────────────────────────────
 def create_tables():
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is not configured")
     Base.metadata.create_all(bind=engine)
     print("Tables created.")
 

@@ -3,21 +3,36 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uuid
-from datetime import datetime
-from sqlmodel import Session, create_engine, select
-from app.database import init_db, engine
+import json
+from datetime import datetime, timezone
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from app.database import create_tables, engine
 from app.models import Meeting, Participant, TranscriptSegment, Decision, ActionItem, Highlight
-from app.config import settings
 
 
 def seed_database():
-    init_db()
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is not configured")
+    create_tables()
     seed_data = get_seed_data()
 
     with Session(engine) as session:
-        existing = session.exec(select(Meeting).limit(1)).first()
+        existing = session.execute(select(Meeting).limit(1)).scalar_one_or_none()
         if existing:
-            print("Database already seeded. Skipping.")
+            meetings_by_id = {
+                meeting.id: meeting
+                for meeting in session.execute(select(Meeting)).scalars()
+            }
+            updated = 0
+            for meeting_data in seed_data:
+                meeting = meetings_by_id.get(meeting_data["id"])
+                topics = meeting_data["summary"].get("keyTopics", [])
+                if meeting is not None and not meeting.key_topics:
+                    meeting.key_topics = json.dumps(topics)
+                    updated += 1
+            session.commit()
+            print(f"Database already seeded. Updated topics for {updated} meetings.")
             return
 
         for m in seed_data:
@@ -29,27 +44,32 @@ def seed_database():
                 meeting_type=m["meetingType"],
                 status="completed",
                 sentiment=m["summary"]["sentiment"],
-                created_at=datetime.utcnow().isoformat(),
+                summary=m["summary"]["executive"],
+                key_topics=json.dumps(m["summary"].get("keyTopics", [])),
+                created_at=datetime.now(timezone.utc).isoformat(),
             )
             session.add(meeting)
             session.flush()
 
+            participant_ids = {}
             for p in m["participants"]:
+                participant_id = f"{meeting.id}-{p['id']}"
+                participant_ids[p["id"]] = participant_id
                 participant = Participant(
-                    id=p["id"],
+                    id=participant_id,
                     meeting_id=meeting.id,
                     name=p["name"],
-                    email=p.get("email", ""),
                     initials=p["initials"],
                     avatar=p.get("avatar", ""),
                 )
                 session.add(participant)
+            session.flush()
 
             for t in m["transcript"]:
                 segment = TranscriptSegment(
-                    id=t["id"],
+                    id=f"{meeting.id}-{t['id']}",
                     meeting_id=meeting.id,
-                    participant_id=t["speakerId"],
+                    participant_id=participant_ids[t["speakerId"]],
                     timestamp=t["timestamp"],
                     text=t["text"],
                 )
@@ -66,7 +86,7 @@ def seed_database():
 
             for a in m["actionItems"]:
                 action = ActionItem(
-                    id=a["id"],
+                    id=f"{meeting.id}-{a['id']}",
                     meeting_id=meeting.id,
                     title=a["title"],
                     assignee=a["assignee"],
@@ -78,13 +98,13 @@ def seed_database():
 
             for h in m["highlights"]:
                 highlight = Highlight(
-                    id=h["id"],
+                    id=f"{meeting.id}-{h['id']}",
                     meeting_id=meeting.id,
                     timestamp=h["timestamp"],
                     title=h["title"],
                     description=h["description"],
                     speaker=h["speaker"],
-                    type=h.get("type", "insight"),
+                    highlight_type=h.get("type", "insight"),
                 )
                 session.add(highlight)
 

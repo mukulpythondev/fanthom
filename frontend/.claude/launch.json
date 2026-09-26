@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "8x-app-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "C:/Users/MUKUL/Music/8x assignment/frontend"],
+      "port": 5173,
+      "url": "http://localhost:5173",
+      "autoPort": true
+    }
+  ]
+}

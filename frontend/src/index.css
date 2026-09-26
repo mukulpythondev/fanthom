@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --color-steno-bg: #0d0d0d;
+  --color-steno-surface: #161616;
+  --color-steno-elevated: #1f1f1f;
+  --color-steno-hover: #262626;
+  --color-steno-border: #2a2a2a;
+  --color-steno-border-subtle: #1e1e1e;
+  --color-steno-text-primary: #ededed;
+  --color-steno-text-secondary: #8a8a8a;
+  --color-steno-text-tertiary: #555;
+  --color-steno-accent: #c8a44e;
+  --color-steno-accent-hover: #d4b35a;
+  --color-steno-accent-subtle: #262018;
+  --color-steno-success: #4ade80;
+  --color-steno-success-subtle: #172a1f;
+  --color-steno-warning: #fbbf24;
+  --color-steno-warning-subtle: #28231a;
+  --color-steno-danger: #f87171;
+  --color-steno-teal: #2dd4bf;
+  --color-steno-teal-subtle: #1a2826;
+  --color-steno-purple: #a78bfa;
+  --color-steno-rose: #fb7185;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--color-steno-bg);
+  color: var(--color-steno-text-primary);
+  font-family: 'Aptos Display', 'Trebuchet MS', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-steno-border);
+  border-radius: 3px;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--color-steno-surface) 25%, var(--color-steno-elevated) 50%, var(--color-steno-surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: var(--color-steno-border);
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-steno-accent);
+  cursor: pointer;
+  border: 2px solid var(--color-steno-bg);
+}
+
+::selection {
+  background: var(--color-steno-accent-subtle);
+  color: var(--color-steno-accent);
+}

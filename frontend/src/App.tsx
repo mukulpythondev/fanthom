@@ -15,22 +15,22 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-fathom-bg">
-        <div className="text-fathom-text-secondary text-sm">Loading meetings...</div>
+      <div className="h-screen w-screen flex items-center justify-center bg-steno-bg">
+        <div className="text-steno-text-secondary text-sm">Loading meetings...</div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-fathom-bg">
+      <div className="h-screen w-screen flex items-center justify-center bg-steno-bg">
         <div className="text-red-400 text-sm">{error}</div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen w-screen flex bg-fathom-bg overflow-hidden">
+    <div className="h-screen w-screen flex bg-steno-bg overflow-hidden">
       <Sidebar />
 
       <main className="flex-1 h-full overflow-hidden">

@@ -68,38 +68,54 @@ export function MeetingPlayer({ duration, onTimeUpdate, className = '' }: Meetin
     }
   }
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  // Generate waveform bars
+  const barCount = 60
+  const bars = Array.from({ length: barCount }, () => Math.random() * 0.7 + 0.3)
+  const activeIndex = Math.floor((currentTime / duration) * barCount)
 
   return (
-    <div className={`bg-fathom-surface border border-fathom-border-subtle rounded-xl p-4 ${className}`}>
-      <div className="flex items-center gap-4">
+    <div className={`bg-steno-surface border border-steno-border-subtle rounded-2xl p-5 ${className}`}>
+      <div className="flex items-center gap-5">
         <button
           onClick={togglePlay}
-          className="w-10 h-10 rounded-full bg-fathom-accent hover:bg-fathom-accent-hover text-white flex items-center justify-center flex-shrink-0 transition-colors"
+          className="w-12 h-12 rounded-full bg-steno-accent hover:bg-steno-accent-hover text-steno-bg flex items-center justify-center flex-shrink-0 transition-colors"
         >
-          {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+          {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
         </button>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-fathom-text-primary font-mono">{formatTime(currentTime)}</span>
-            <span className="text-xs text-fathom-text-tertiary font-mono">{formatTime(duration)}</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-steno-text-primary font-mono">{formatTime(currentTime)}</span>
+            <span className="text-xs text-steno-text-tertiary font-mono">{formatTime(duration)}</span>
           </div>
 
-          <div className="relative h-1.5 bg-fathom-bg rounded-full cursor-pointer">
-            <div
-              className="absolute left-0 top-0 h-full bg-fathom-accent rounded-full transition-all duration-200"
-              style={{ width: `${progress}%` }}
-            />
-            <input
-              type="range"
-              min="0"
-              max={duration}
-              value={currentTime}
-              onChange={handleSeek}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
+          {/* Waveform visualization */}
+          <div className="flex items-end gap-[2px] h-10 mb-2">
+            {bars.map((h, i) => {
+              const isPlayed = i < activeIndex
+              const isCurrent = i === activeIndex
+              return (
+                <div
+                  key={i}
+                  className={`flex-1 rounded-full transition-colors ${
+                    isCurrent ? 'bg-steno-accent' : isPlayed ? 'bg-steno-accent/40' : 'bg-steno-border'
+                  }`}
+                  style={{ height: `${h * 100}%`, minHeight: '3px' }}
+                />
+              )
+            })}
           </div>
+
+          <input
+            type="range"
+            min="0"
+            max={duration}
+            value={currentTime}
+            onChange={handleSeek}
+            className="w-full h-1 bg-steno-border rounded-full appearance-none cursor-pointer
+                       [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                       [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-steno-accent"
+          />
         </div>
       </div>
     </div>

@@ -1,13 +1,30 @@
-from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_
 from datetime import datetime, timezone
-import os, json
+import json
+import logging
+import os
+import urllib.error
+import urllib.request
 
-from .database import SessionLocal, Meeting, Participant, TranscriptSegment, Decision, ActionItem, Highlight
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+
+from .database import (
+    ActionItem,
+    Meeting,
+    Participant,
+    SessionLocal,
+    create_tables,
+    engine,
+)
 
 app = FastAPI(title="Meeting Intelligence API")
+logger = logging.getLogger("meeting-intelligence")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    logger.addHandler(logging.StreamHandler())
+logger.propagate = False
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +36,8 @@ app.add_middleware(
 
 
 def get_db():
+    if SessionLocal is None:
+        raise RuntimeError("DATABASE_URL is not configured")
     db = SessionLocal()
     try:
         yield db
@@ -26,26 +45,107 @@ def get_db():
         db.close()
 
 
-def meeting_to_dict(m: Meeting):
+@app.on_event("startup")
+def on_startup():
+    create_tables()
+
+
+def parse_topics(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, list) else []
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+
+def participant_to_dict(participant: Participant) -> dict:
     return {
-        "id": m.id,
-        "title": m.title,
-        "date": m.date,
-        "duration": m.duration,
-        "meeting_type": m.meeting_type,
-        "status": m.status,
-        "sentiment": m.sentiment,
-        "participant_count": m.participant_count,
-        "transcript_length": m.transcript_length,
-        "summary": m.summary,
-        "key_topics": json.loads(m.key_topics or "[]"),
-        "ai_score": m.ai_score,
-        "speaker_count": m.speaker_count,
-        "participant_names": json.loads(m.participant_names or "[]"),
-        "action_count": m.action_count,
-        "decision_count": m.decision_count,
-        "created_at": m.created_at,
+        "id": participant.id,
+        "name": participant.name,
+        "email": getattr(participant, "email", ""),
+        "initials": participant.initials,
+        "avatar": participant.avatar,
     }
+
+
+def meeting_to_dict(meeting: Meeting) -> dict:
+    participants = list(meeting.participants)
+    decisions = list(meeting.decisions)
+    participant_names = [participant.name for participant in participants]
+    participant_map = {participant.id: participant.name for participant in participants}
+
+    return {
+        "id": meeting.id,
+        "title": meeting.title,
+        "date": meeting.date,
+        "duration": meeting.duration,
+        "meeting_type": meeting.meeting_type,
+        "status": meeting.status,
+        "sentiment": meeting.sentiment,
+        "summary": {
+            "executive": meeting.summary or "",
+            "keyTopics": parse_topics(meeting.key_topics),
+            "decisions": [decision.text for decision in decisions],
+            "discussionPoints": [],
+            "sentiment": meeting.sentiment,
+        },
+        "participant_names": participant_names,
+        "participants": [participant_to_dict(participant) for participant in participants],
+        "transcript": [
+            {
+                "id": segment.id,
+                "speaker": participant_map.get(segment.participant_id, "Unknown"),
+                "participant_id": segment.participant_id,
+                "timestamp": segment.timestamp,
+                "text": segment.text,
+            }
+            for segment in sorted(meeting.transcript_segments, key=lambda item: item.timestamp)
+        ],
+        "decisions": [
+            {"id": decision.id, "text": decision.text, "timestamp": decision.timestamp}
+            for decision in decisions
+        ],
+        "action_items": [
+            {
+                "id": action.id,
+                "title": action.title,
+                "assignee": action.assignee,
+                "completed": action.completed,
+                "due_date": action.due_date,
+                "source_timestamp": action.source_timestamp,
+            }
+            for action in meeting.action_items
+        ],
+        "highlights": [
+            {
+                "id": highlight.id,
+                "title": highlight.title,
+                "description": highlight.description,
+                "speaker": highlight.speaker,
+                "timestamp": highlight.timestamp,
+                "type": highlight.highlight_type,
+            }
+            for highlight in meeting.highlights
+        ],
+    }
+
+
+def get_meeting_or_404(meeting_id: str, db: Session) -> Meeting:
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    return meeting
+
+
+@app.get("/api/health")
+def health(db: Session = Depends(get_db)):
+    try:
+        db.query(Meeting).limit(1).all()
+        return {"status": "ok", "database": "connected"}
+    except Exception:
+        return {"status": "error", "database": "unavailable"}
 
 
 @app.get("/api/meetings")
@@ -57,18 +157,18 @@ def list_meetings(
     limit: int = 20,
     offset: int = 0,
 ):
-    q = db.query(Meeting)
+    query = db.query(Meeting)
     if meeting_type:
-        q = q.filter(Meeting.meeting_type == meeting_type)
+        query = query.filter(Meeting.meeting_type == meeting_type)
     if sentiment:
-        q = q.filter(Meeting.sentiment == sentiment)
+        query = query.filter(Meeting.sentiment == sentiment)
     if search:
         like = f"%{search}%"
-        q = q.filter(or_(Meeting.title.ilike(like), Meeting.summary.ilike(like)))
-    total = q.count()
-    meetings = q.order_by(desc(Meeting.date)).limit(limit).offset(offset).all()
+        query = query.filter(or_(Meeting.title.ilike(like), Meeting.summary.ilike(like)))
+    total = query.count()
+    meetings = query.order_by(Meeting.date.desc()).limit(limit).offset(offset).all()
     return {
-        "meetings": [meeting_to_dict(m) for m in meetings],
+        "meetings": [meeting_to_dict(meeting) for meeting in meetings],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -77,185 +177,146 @@ def list_meetings(
 
 @app.get("/api/meetings/{meeting_id}")
 def get_meeting(meeting_id: str, db: Session = Depends(get_db)):
-    m = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not m:
-        return {"error": "Meeting not found"}
+    return meeting_to_dict(get_meeting_or_404(meeting_id, db))
 
-    participants = db.query(Participant).filter(Participant.meeting_id == meeting_id).all()
-    segments = db.query(TranscriptSegment).filter(TranscriptSegment.meeting_id == meeting_id).order_by(TranscriptSegment.timestamp).all()
-    decisions = db.query(Decision).filter(Decision.meeting_id == meeting_id).all()
-    action_items = db.query(ActionItem).filter(ActionItem.meeting_id == meeting_id).all()
-    highlights = db.query(Highlight).filter(Highlight.meeting_id == meeting_id).all()
 
-    p_map = {p.id: p.name for p in participants}
-    transcript = [
-        {"id": s.id, "speaker": p_map.get(s.participant_id, "Unknown"), "timestamp": s.timestamp, "text": s.text}
-        for s in segments
-    ]
+@app.get("/api/meetings/{meeting_id}/transcript")
+def get_transcript(meeting_id: str, db: Session = Depends(get_db)):
+    return meeting_to_dict(get_meeting_or_404(meeting_id, db))["transcript"]
+
+
+@app.get("/api/meetings/{meeting_id}/decisions")
+def get_decisions(meeting_id: str, db: Session = Depends(get_db)):
+    return meeting_to_dict(get_meeting_or_404(meeting_id, db))["decisions"]
+
+
+@app.get("/api/meetings/{meeting_id}/actions")
+def get_actions(meeting_id: str, db: Session = Depends(get_db)):
+    return meeting_to_dict(get_meeting_or_404(meeting_id, db))["action_items"]
+
+
+@app.patch("/api/actions/{item_id}")
+def update_action(item_id: str, payload: dict, db: Session = Depends(get_db)):
+    action = db.query(ActionItem).filter(ActionItem.id == item_id).first()
+    if action is None:
+        raise HTTPException(status_code=404, detail="Action item not found")
+    if not isinstance(payload.get("completed"), bool):
+        raise HTTPException(status_code=400, detail="completed must be a boolean")
+    action.completed = payload["completed"]
+    db.commit()
+    db.refresh(action)
+    return {
+        "id": action.id,
+        "title": action.title,
+        "assignee": action.assignee,
+        "completed": action.completed,
+        "due_date": action.due_date,
+        "source_timestamp": action.source_timestamp,
+    }
+
+
+@app.get("/api/meetings/{meeting_id}/highlights")
+def get_highlights(meeting_id: str, db: Session = Depends(get_db)):
+    return meeting_to_dict(get_meeting_or_404(meeting_id, db))["highlights"]
+
+
+@app.post("/api/meetings/{meeting_id}/ask")
+def ask_meeting(meeting_id: str, payload: dict, db: Session = Depends(get_db)):
+    meeting = get_meeting_or_404(meeting_id, db)
+    question = str((payload or {}).get("question", "")).strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+    logger.info("Ask AI request received: meeting_id=%s question=%r", meeting_id, question[:200])
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
+
+    details = meeting_to_dict(meeting)
+    context = json.dumps({
+        "title": details["title"],
+        "date": details["date"],
+        "duration": details["duration"],
+        "sentiment": details["sentiment"],
+        "summary": details["summary"],
+        "participants": details["participants"],
+        "transcript": details["transcript"],
+        "decisions": details["decisions"],
+        "action_items": details["action_items"],
+        "highlights": details["highlights"],
+    }, ensure_ascii=True)
+    prompt = (
+        "You are a meeting intelligence assistant. Answer only from the supplied meeting context. "
+        "If the context does not contain the answer, say that clearly. Be concise and specific."
+        f"\n\nMEETING CONTEXT:\n{context}\n\nQUESTION:\n{question}"
+    )
+    request_body = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 900},
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + api_key,
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            response_data = json.loads(response.read())
+        answer = response_data["candidates"][0]["content"]["parts"][0]["text"]
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, IndexError, json.JSONDecodeError) as error:
+        logger.exception("Ask AI request failed: meeting_id=%s", meeting_id)
+        raise HTTPException(status_code=502, detail=f"Gemini request failed: {error}") from error
+
+    logger.info("Ask AI response received: meeting_id=%s answer_length=%d", meeting_id, len(answer))
 
     return {
-        **meeting_to_dict(m),
-        "participants": [{"id": p.id, "name": p.name, "initials": p.initials, "avatar": p.avatar} for p in participants],
-        "transcript": transcript,
-        "decisions": [{"id": d.id, "text": d.text, "timestamp": d.timestamp} for d in decisions],
-        "action_items": [{"id": a.id, "title": a.title, "assignee": a.assignee, "completed": a.completed, "due_date": a.due_date, "source_timestamp": a.source_timestamp} for a in action_items],
-        "highlights": [{"id": h.id, "title": h.title, "description": h.description, "speaker": h.speaker, "timestamp": h.timestamp, "type": h.highlight_type} for h in highlights],
+        "answer": answer,
+        "sources": [
+            {"type": "highlight", "id": highlight["id"], "title": highlight["title"]}
+            for highlight in details["highlights"]
+        ],
     }
 
 
 @app.post("/api/meetings")
 def create_meeting(payload: dict, db: Session = Depends(get_db)):
-    m = Meeting(
+    summary = payload.get("summary", "")
+    key_topics = payload.get("key_topics", [])
+    meeting = Meeting(
         title=payload.get("title", "Untitled Meeting"),
         date=payload.get("date", datetime.now(timezone.utc).isoformat()),
         duration=payload.get("duration", 0),
         meeting_type=payload.get("meeting_type", "sync"),
-        summary=payload.get("summary", ""),
+        summary=summary if isinstance(summary, str) else summary.get("executive", ""),
+        key_topics=json.dumps(key_topics),
     )
-    db.add(m)
+    db.add(meeting)
     db.commit()
-    db.refresh(m)
-    return meeting_to_dict(m)
+    db.refresh(meeting)
+    return meeting_to_dict(meeting)
 
 
-@app.patch("/api/action-items/{item_id}")
-def update_action_item(item_id: str, payload: dict, db: Session = Depends(get_db)):
-    item = db.query(ActionItem).filter(ActionItem.id == item_id).first()
-    if not item:
-        return {"error": "Not found"}
-    for field in ("completed", "title", "assignee", "due_date"):
-        if field in payload:
-            setattr(item, field, payload[field])
-    db.commit()
-    db.refresh(item)
+@app.get("/api/search")
+def search_meetings(q: str = "", db: Session = Depends(get_db)):
+    if not q.strip():
+        return {"results": []}
+    like = f"%{q.strip()}%"
+    meetings = db.query(Meeting).filter(
+        or_(Meeting.title.ilike(like), Meeting.summary.ilike(like))
+    ).order_by(Meeting.date.desc()).limit(10).all()
     return {
-        "id": item.id, "title": item.title, "assignee": item.assignee,
-        "completed": item.completed, "due_date": item.due_date, "source_timestamp": item.source_timestamp,
+        "results": [
+            {
+                "meetingId": meeting.id,
+                "meetingTitle": meeting.title,
+                "summary": meeting.summary or "",
+                "score": 10 if q.lower() in meeting.title.lower() else 1,
+            }
+            for meeting in meetings
+        ]
     }
 
 
-@app.post("/api/meetings/{meeting_id}/ai-coach")
-def ai_coach(meeting_id: str, db: Session = Depends(get_db)):
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        return {
-            "suggestions": [
-                "Add GEMINI_API_KEY to your environment variables to enable AI coaching.",
-                "This meeting shows good alignment but consider assigning clearer ownership for each decision.",
-            ],
-        }
-
-    import urllib.request
-    m = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not m:
-        return {"error": "Meeting not found"}
-
-    decisions = db.query(Decision).filter(Decision.meeting_id == meeting_id).all()
-    action_items = db.query(ActionItem).filter(ActionItem.meeting_id == meeting_id).all()
-    highlights = db.query(Highlight).filter(Highlight.meeting_id == meeting_id).all()
-
-    prompt = f"""You are a meeting coach. Analyze this meeting and give 3-5 concrete, actionable suggestions.
-
-Meeting: {m.title}
-Summary: {m.summary}
-Sentiment: {m.sentiment}
-Decisions: {[d.text for d in decisions]}
-Action Items: {[a.title + " (" + a.assignee + ")" for a in action_items]}
-Highlights: {[h.title + ": " + h.description for h in highlights]}
-
-Return only a JSON array of suggestion strings. No markdown, no extra text."""
-
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 500},
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + api_key,
-        data=body,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-        try:
-            suggestions = json.loads(text)
-        except Exception:
-            suggestions = [line.strip("- ").strip() for line in text.split("\n") if line.strip()]
-        return {"suggestions": suggestions}
-    except Exception as e:
-        return {"error": str(e), "suggestions": ["Analysis unavailable. Check API key."]}
-
-
-@app.post("/api/meetings/{meeting_id}/ask")
-def ask_meeting(meeting_id: str, payload: dict, db: Session = Depends(get_db)):
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    m = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not m:
-        return {"error": "Meeting not found"}
-
-    decisions = db.query(Decision).filter(Decision.meeting_id == meeting_id).all()
-    action_items = db.query(ActionItem).filter(ActionItem.meeting_id == meeting_id).all()
-    highlights = db.query(Highlight).filter(Highlight.meeting_id == meeting_id).all()
-    segments = db.query(TranscriptSegment).filter(TranscriptSegment.meeting_id == meeting_id).order_by(TranscriptSegment.timestamp).limit(30).all()
-    participants = db.query(Participant).filter(Participant.meeting_id == meeting_id).all()
-    p_map = {p.id: p.name for p in participants}
-
-    question = (payload or {}).get("question", "").lower()
-
-    if any(k in question for k in ["decision", "decided", "agree", "commit"]):
-        answer = f"Here are the key decisions from {m.title}:\n\n"
-        for i, d in enumerate(decisions, 1):
-            answer += f"{i}. {d.text}\n"
-        return {"answer": answer, "sources": [{"type": "decision", "text": d.text} for d in decisions[:3]]}
-
-    if any(k in question for k in ["action", "task", "todo", "assign"]):
-        pending = [a for a in action_items if not a.completed]
-        answer = f"Pending action items from {m.title}:\n\n"
-        if pending:
-            for i, a in enumerate(pending, 1):
-                answer += f"{i}. {a.title} — {a.assignee}, due {a.due_date}\n"
-        else:
-            answer += "No pending action items.\n"
-        return {"answer": answer, "sources": [{"type": "action", "text": a.title} for a in action_items[:3]]}
-
-    if any(k in question for k in ["topic", "subject", "discuss", "main", "key"]):
-        topics = json.loads(m.key_topics or "[]")
-        answer = f"The main topics in {m.title}:\n\n"
-        for t in topics:
-            answer += f"- {t}\n"
-        if not topics:
-            answer += m.summary or "No specific topics extracted."
-        return {"answer": answer, "sources": []}
-
-    if any(k in question for k in ["summar", "overview", "recap"]):
-        return {"answer": f"**{m.title}**\n\n{m.summary or 'No summary available.'}\n\n**Participants:** {', '.join(p.name for p in participants)}", "sources": []}
-
-    if any(k in question for k in ["highlight", "key moment", "important"]):
-        answer = f"Highlights from {m.title}:\n\n"
-        for i, h in enumerate(highlights, 1):
-            answer += f"{i}. {h.title} ({h.timestamp}s) — {h.speaker}: {h.description}\n"
-        return {"answer": answer, "sources": []}
-
-    if any(k in question for k in ["who", "attend", "participant", "people"]):
-        answer = f"{len(participants)} participants in {m.title}:\n\n"
-        for p in participants:
-            answer += f"- {p.name}\n"
-        return {"answer": answer, "sources": []}
-
-    if any(k in question for k in ["sentiment", "tone", "mood", "feeling"]):
-        return {"answer": f"The sentiment of {m.title} was {m.sentiment}.", "sources": []}
-
-    # Default: rule-based fallback from summary + decisions
-    answer = f"**{m.title}**\n\n{m.summary or 'No summary available.'}\n\n"
-    if decisions:
-        answer += "**Decisions:**\n"
-        for d in decisions:
-            answer += f"- {d.text}\n"
-    return {"answer": answer, "sources": []}
-
-
-@app.get("/api/health")
-def health():
-    return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
+if engine is None:
+    # The app remains importable for local checks; requests require DATABASE_URL.
+    pass

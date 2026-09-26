@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useApp } from '../context/AppContext'
+import { searchMeetings } from '../services/api'
 import { formatDate, formatDuration, getMeetingTypeConfig } from '../lib/utils'
 import {
   Search, Loader2, TrendingUp, ArrowRight, Sparkles
@@ -32,7 +33,6 @@ export function SearchView() {
     if (!q.trim()) return
     setLoading(true)
     try {
-      const { searchMeetings } = await import('../services/api')
       const res = await searchMeetings(q.trim())
       setResults(res)
     } catch {

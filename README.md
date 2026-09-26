@@ -10,10 +10,10 @@ A Fathom-inspired AI meeting intelligence prototype built for the 8x Assignment.
 - Simulated playback with transcript and highlight synchronization
 - Action-item filtering and completion tracking
 - Timestamped meeting highlights
-- Deterministic, meeting-grounded AI chat
+- Gemini-powered, meeting-grounded AI chat through the backend
 - Responsive desktop-oriented application shell
 
-The recording layer and AI provider are intentionally simulated. This keeps the prototype focused on the core post-meeting product experience.
+The recording layer is intentionally simulated. The meeting data, action-item changes, and AI requests use the backend; the Gemini key remains server-side.
 
 ## Tech Stack
 
@@ -23,6 +23,10 @@ The recording layer and AI provider are intentionally simulated. This keeps the 
 - Tailwind CSS 4
 - Lucide React
 - date-fns
+- FastAPI
+- SQLAlchemy
+- Supabase PostgreSQL
+- Gemini API
 
 ## Getting Started
 
@@ -30,39 +34,67 @@ The recording layer and AI provider are intentionally simulated. This keeps the 
 
 - Node.js 20 or newer
 - npm
+- Python 3.11 or newer
+- A Supabase PostgreSQL connection string
+- A Gemini API key for meeting Q&A
 
 ### Installation
 
 ```bash
 git clone https://github.com/mukulpythondev/fanthom.git
 cd fanthom
+cd frontend
 npm install
 npm run dev
 ```
 
 Vite will print the local development URL, normally `http://localhost:5173`.
 
-No environment variables or external services are required.
+Create `backend/.env` or export these variables before starting the backend. Never put the Gemini key in frontend environment variables.
+
+```env
+DATABASE_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+GEMINI_API_KEY=<server-side-key>
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+Start the API from the repository root with:
+
+```bash
+python backend/run.py
+```
+
+The frontend proxies `/api` requests to `http://localhost:8001`. Seed the configured database with the 12 reference meetings using:
+
+```bash
+python backend/app/seed.py
+```
 
 ## Available Scripts
 
 ```bash
+cd frontend
 npm run dev       # Start the development server
 npm run build     # Type-check and create a production build
 npm run preview   # Preview the production build locally
-npx oxlint src    # Lint application source
+npm run lint      # Lint application source
 ```
 
 ## Project Structure
 
 ```text
-src/
-  components/     Reusable meeting and navigation components
-  context/        In-memory application state and actions
-  data/           Seeded meeting data
-  pages/          Dashboard, meeting detail, and search views
-  services/       Deterministic meeting AI service
-  types/          Shared TypeScript models
+frontend/
+  src/
+    components/   Reusable meeting and navigation components
+    context/      Frontend view state and API-backed actions
+    data/         Seed/reference meeting data for backend seeding
+    pages/        Dashboard, meeting detail, and search views
+    services/     Typed API clients for meetings and Gemini Q&A
+    types/        Shared TypeScript models
+backend/
+  app/main.py     FastAPI application and API contract
+  app/database.py SQLAlchemy models and Supabase connection
+  app/seed.py     Reference data seeder
 docs/             Product specification
 images/           User-captured product research references
 .agent-logs/      Preserved coding-agent capture logs
@@ -83,9 +115,18 @@ For the most complete walkthrough, open **Q4 Product Strategy Review**. It is a 
 4. Action-item completion
 5. Contextual questions such as `What decisions were made?`
 
-## Prototype Scope
+## Architecture and Scope
 
-This repository prioritizes the assignment's core meeting experience. It does not include production authentication, a backend, persistence, real media capture, URL routing, sharing, templates, or calendar integrations. In-memory changes reset when the page reloads.
+The runtime path is:
+
+```text
+React/Vite frontend
+  -> FastAPI backend
+  -> Supabase PostgreSQL
+  -> Gemini API (meeting Q&A only)
+```
+
+The repository prioritizes the assignment's core meeting experience. Authentication, real media capture, URL routing, sharing, templates, and calendar integrations are intentionally outside the current revision. Action-item completion is persisted through the API and database.
 
 See [docs/product-spec.md](docs/product-spec.md) for the original product brief and [IMPLEMENTATION-AUDIT.md](IMPLEMENTATION-AUDIT.md) for the implementation audit.
 
