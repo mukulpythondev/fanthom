@@ -36,8 +36,12 @@ export function getMeetingTypeConfig(type: string) {
     design: { label: 'Design', color: 'text-violet-400', bg: 'bg-violet-400/10', icon: 'Palette' },
     team: { label: 'Team', color: 'text-cyan-400', bg: 'bg-cyan-400/10', icon: 'Users' },
     '1:1': { label: '1:1', color: 'text-orange-400', bg: 'bg-orange-400/10', icon: 'User' },
+    sync: { label: 'Sync', color: 'text-sky-400', bg: 'bg-sky-400/10', icon: 'MessageSquare' },
+    review: { label: 'Review', color: 'text-indigo-400', bg: 'bg-indigo-400/10', icon: 'Eye' },
+    external: { label: 'External', color: 'text-lime-400', bg: 'bg-lime-400/10', icon: 'Globe' },
+    'all-hands': { label: 'All-Hands', color: 'text-rose-400', bg: 'bg-rose-400/10', icon: 'Users' },
   }
-  return configs[type] || configs['team']
+  return configs[type] || { label: type, color: 'text-fathom-text-secondary', bg: 'bg-fathom-surface', icon: 'MessageSquare' }
 }
 
 export function getSentimentConfig(sentiment: string) {

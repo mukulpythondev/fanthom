@@ -59,6 +59,7 @@ export interface Meeting {
   highlights: Highlight[]
   template: string
   status: 'completed' | 'processing'
+  decisions?: { id: string; text: string; timestamp?: number }[]
 }
 
 export interface ChatMessage {

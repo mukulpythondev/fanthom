@@ -1,16 +1,19 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
-import { meetings as allMeetings } from '../data/meetings'
 import type { Meeting, ChatMessage } from '../types'
+import { fetchMeetings, fetchMeeting, toggleActionItemApi, queryMeeting } from '../services/api'
 
 interface AppState {
   meetings: Meeting[]
   selectedMeeting: Meeting | null
   currentView: 'dashboard' | 'meeting' | 'search'
   searchQuery: string
+  setSearchQuery: (q: string) => void
   aiMessages: Record<string, ChatMessage[]>
   aiLoading: boolean
   meetingViewTab: 'summary' | 'transcript' | 'actions'
   isSidebarOpen: boolean
+  loading: boolean
+  error: string | null
   selectMeeting: (id: string) => void
   goToDashboard: () => void
   goToSearch: (q?: string) => void
@@ -18,12 +21,13 @@ interface AppState {
   toggleSidebar: () => void
   toggleActionItem: (meetingId: string, actionId: string) => void
   sendAiMessage: (meetingId: string, message: string) => Promise<void>
+  refreshMeetings: () => Promise<void>
 }
 
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [meetings, setMeetings] = useState<Meeting[]>(allMeetings)
+  const [meetings, setMeetings] = useState<Meeting[]>([])
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
   const [currentView, setCurrentView] = useState<'dashboard' | 'meeting' | 'search'>('dashboard')
   const [searchQuery, setSearchQuery] = useState('')
@@ -31,13 +35,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [aiLoading, setAiLoading] = useState(false)
   const [meetingViewTab, setMeetingViewTab] = useState<'summary' | 'transcript' | 'actions'>('summary')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const selectMeeting = useCallback((id: string) => {
-    const m = meetings.find(m => m.id === id) || null
-    setSelectedMeeting(m)
-    setCurrentView('meeting')
-    setMeetingViewTab('summary')
-  }, [meetings])
+  const refreshMeetings = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await fetchMeetings()
+      setMeetings(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load meetings')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const selectMeeting = useCallback(async (id: string) => {
+    const data = await fetchMeeting(id)
+    if (data) {
+      setSelectedMeeting(data)
+      setCurrentView('meeting')
+      setMeetingViewTab('summary')
+    }
+  }, [])
 
   const goToDashboard = useCallback(() => {
     setSelectedMeeting(null)
@@ -64,7 +85,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       const history = aiMessages[meetingId] || []
-      const { queryMeeting } = await import('../services/ai')
       const { answer } = await queryMeeting(meetingId, message, [...history, userMsg])
 
       const assistantMsg: ChatMessage = {
@@ -97,7 +117,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSidebarOpen(p => !p)
   }, [])
 
-  const toggleActionItem = useCallback((meetingId: string, actionId: string) => {
+  const toggleActionItem = useCallback(async (meetingId: string, actionId: string) => {
     setMeetings(prev => prev.map(m => {
       if (m.id !== meetingId) return m
       return {
@@ -107,12 +127,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         )
       }
     }))
-  }, [])
+    if (selectedMeeting?.id === meetingId) {
+      setSelectedMeeting(prev => prev ? {
+        ...prev,
+        actionItems: prev.actionItems.map(a =>
+          a.id === actionId ? { ...a, status: a.status === 'pending' ? 'completed' : 'pending' } : a
+        )
+      } : null)
+    }
+
+    try {
+      await toggleActionItemApi(meetingId, actionId, selectedMeeting?.actionItems.find(a => a.id === actionId)?.status !== 'pending')
+    } catch (err) {
+      console.error('Failed to toggle action item:', err)
+    }
+  }, [selectedMeeting])
 
   return (
     <AppContext.Provider value={{
-      meetings, selectedMeeting, currentView, searchQuery, aiMessages, aiLoading, meetingViewTab, isSidebarOpen,
-      selectMeeting, goToDashboard, goToSearch, setMeetingViewTab, toggleSidebar, toggleActionItem, sendAiMessage,
+      meetings, selectedMeeting, currentView, searchQuery, aiMessages, aiLoading,
+      meetingViewTab, isSidebarOpen, loading, error,
+      selectMeeting, goToDashboard, goToSearch, setSearchQuery, setMeetingViewTab,
+      toggleSidebar, toggleActionItem, sendAiMessage, refreshMeetings,
     }}>
       {children}
     </AppContext.Provider>

@@ -8,7 +8,7 @@ import {
 export function Sidebar() {
   const {
     meetings, currentView,
-    goToDashboard, selectMeeting, searchQuery, isSidebarOpen, toggleSidebar
+    goToDashboard, selectMeeting, searchQuery, setSearchQuery, goToSearch, isSidebarOpen, toggleSidebar
   } = useApp()
 
   const pendingMeetings = meetings.filter(m => m.actionItems.some(a => a.status === 'pending')).slice(0, 5)
@@ -54,7 +54,7 @@ export function Sidebar() {
               type="text"
               placeholder="Search..."
               value={searchQuery}
-              onChange={() => {}}
+              onChange={(e) => { setSearchQuery(e.target.value); if (e.target.value.length > 0) { goToSearch(e.target.value) } }}
               className="w-full pl-9 pr-3 py-2 rounded-lg bg-fathom-surface border border-fathom-border-subtle text-sm text-fathom-text-primary placeholder-fathom-text-tertiary focus:outline-none focus:border-fathom-accent/50 transition-colors"
             />
           </div>

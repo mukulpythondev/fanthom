@@ -1,9 +1,9 @@
 # Implementation Audit
 
-**Date:** 2026-09-22
+**Date:** 2026-09-26
 **Auditor:** Claude Fable 5.1
 **Spec:** `docs/product-spec.md`
-**Scope:** Full source code inspection, no modifications made
+**Scope:** Full source code inspection, no modifications made during audit; updated to reflect backend implementation added after original audit.
 
 ---
 
@@ -443,34 +443,45 @@
 
 ## 28. API/Backend/Data Persistence
 
-**Status:** ❌ NOT DONE
+**Status:** ✅ DONE (backend), 🔧 PARTIAL (frontend migration)
 
-**Location:** N/A — no server directory, no API routes
+**Location:** `backend/app/main.py`, `backend/app/models.py`, `backend/app/database.py`, `backend/app/seed.py`, `src/services/api.ts`, `src/context/AppContext.tsx`
 
 **Evidence:**
-- No `server/`, `api/`, `backend/`, or `routes/` directory
-- All data is in-memory via `useState` in `AppContext`
-- Data resets on page refresh — no localStorage, no IndexedDB, no database
-- `package.json` has no backend dependencies (no Express, Fastify, Hono, etc.)
-- All imports are frontend-only (`react`, `lucide-react`, `date-fns`, `uuid`, `react-router-dom`)
+- **Backend:** FastAPI app in `backend/app/main.py` with CORS middleware, SQLAlchemy ORM, and SQLite database
+- **Database models:** `Meeting`, `Participant`, `TranscriptSegment`, `Decision`, `ActionItem`, `Highlight` defined in `backend/app/models.py`
+- **Database layer:** `backend/app/database.py` — SQLAlchemy engine, session management, table creation
+- **Seeded data:** `backend/app/seed.py` — seeds 12 meetings with full data (participants, transcripts, decisions, action items, highlights) into SQLite database at `backend/data.db`
+- **API endpoints:**
+  - `GET /api/meetings` — list meetings with filtering by type, sentiment, search
+  - `GET /api/meetings/{id}` — full meeting detail with all related data
+  - `POST /api/meetings` — create meeting
+  - `PATCH /api/action-items/{id}` — update action item completion
+  - `POST /api/meetings/{id}/ask` — AI chat endpoint with rule-based responses grounded in meeting data
+  - `POST /api/meetings/{id}/ai-coach` — AI coaching suggestions (requires GEMINI_API_KEY for live LLM)
+  - `GET /api/health` — health check
+- **Frontend API service:** `src/services/api.ts` — `fetchMeetings()`, `fetchMeeting()`, `queryMeeting()`, `searchMeetings()`, `toggleActionItemApi()` all call the backend
+- **Vite proxy:** `vite.config.ts` proxies `/api` requests to `http://localhost:8000`
+- **Frontend state management:** `AppContext.tsx` now fetches from backend on mount via `refreshMeetings()`, meeting selection via `fetchMeeting()`, action item toggles call backend API
 
-**Missing:** Entire backend layer. No API endpoints, no persistence, no database.
+**Remaining gaps:**
+- Frontend still imports seed data from `src/data/meetings.ts` for the AI chat mock layer (`src/services/ai.ts` imports `meetings`), but the primary chat flow (`AppContext.tsx` → `api.ts` → `/ask`) uses the backend
+- `searchMeetings()` in `src/services/api.ts` calls `/api/search` but that endpoint does not exist in the backend — search works via `GET /api/meetings?search=` for listing only
+- Database is SQLite (`backend/data.db`), not PostgreSQL — `database.py` has PostgreSQL connection strings but the actual seed and run scripts use SQLite
 
 ---
 
 ## 29. Production Build
 
-**Status:** ⚠️ UNVERIFIED
+**Status:** ✅ VERIFIED
 
 **Location:** `vite.config.ts`, `package.json`
 
 **Evidence:**
-- `package.json` has `"build": "tsc -b && vite build"` script
-- Vite config is minimal and standard
-- No build errors detected in code inspection
-- **However:** `tsc -b` (composite build) requires `tsconfig.node.json` and `tsconfig.app.json` to be properly configured — these exist but were not verified by running the build
-- No deployment configuration (no Vercel, Netlify, Docker, etc.)
-- No environment variable handling
+- `npm run build` (`tsc -b && vite build`) succeeds — verified during this session
+- Output: `dist/index.html`, `dist/assets/index-*.css` (34.21 KB), `dist/assets/index-*.js` (298.08 KB, 87.82 KB gzipped)
+- Vite proxy config present for development API forwarding
+- No build errors
 
 ---
 
@@ -481,7 +492,10 @@
 **Location:** `.agent-logs/` directory, `CAPTURE-TEST.md`
 
 **Evidence:**
-- `.agent-logs/` directory exists with session log files
+- `.agent-logs/` directory exists with session log files from multiple sessions
+- Hook mechanism: `.claude/settings.json` with `UserPromptSubmit` and `Stop` hooks invoking `.claude/scripts/capture.mjs`
+- Capture script writes verbatim prompts and responses with UTC timestamps and model names
+- `CAPTURE-TEST.md` documents the mechanism, config, and canary test results
 - No `.gitignore` entry excluding `.agent-logs/`
 - Spec requires `.agent-logs/` to ship with the repo
 

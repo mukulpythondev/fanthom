@@ -3,10 +3,31 @@ import { Sidebar } from './components/Sidebar'
 import { Dashboard } from './pages/Dashboard'
 import { MeetingView } from './pages/MeetingView'
 import { SearchView } from './pages/SearchView'
+import { useEffect } from 'react'
 import './index.css'
 
 function AppContent() {
-  const { currentView } = useApp()
+  const { currentView, refreshMeetings, loading, error } = useApp()
+
+  useEffect(() => {
+    refreshMeetings()
+  }, [refreshMeetings])
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-fathom-bg">
+        <div className="text-fathom-text-secondary text-sm">Loading meetings...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-fathom-bg">
+        <div className="text-red-400 text-sm">{error}</div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen w-screen flex bg-fathom-bg overflow-hidden">

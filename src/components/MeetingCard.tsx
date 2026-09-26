@@ -39,9 +39,9 @@ export function MeetingCard({ meeting }: MeetingCardProps) {
                           group-hover:border-fathom-accent/30 transition-colors">
             {meeting.recording.thumbnail}
           </div>
-          <button className="p-1 rounded hover:bg-fathom-hover text-fathom-text-tertiary hover:text-fathom-text-primary transition-colors opacity-0 group-hover:opacity-100">
+          <div className="p-1 rounded hover:bg-fathom-hover text-fathom-text-tertiary hover:text-fathom-text-primary transition-colors opacity-0 group-hover:opacity-100">
             <MoreVertical size={14} />
-          </button>
+          </div>
         </div>
       </div>
 

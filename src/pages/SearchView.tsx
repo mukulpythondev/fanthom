@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useApp } from '../context/AppContext'
 import { formatDate, formatDuration, getMeetingTypeConfig } from '../lib/utils'
 import {
-  Search, Loader2, TrendingUp, MessageSquare, ChevronDown, ChevronUp, ArrowRight, Sparkles
+  Search, Loader2, TrendingUp, ArrowRight, Sparkles
 } from 'lucide-react'
 
 const SUGGESTED_QUERIES = [
@@ -14,11 +14,10 @@ const SUGGESTED_QUERIES = [
 ]
 
 export function SearchView() {
-  const { searchQuery, meetings } = useApp()
+  const { searchQuery, meetings, selectMeeting } = useApp()
   const [query, setQuery] = useState(searchQuery)
   const [results, setResults] = useState<{ meetingId: string; excerpt: string; score: number }[]>([])
   const [loading, setLoading] = useState(false)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +32,7 @@ export function SearchView() {
     if (!q.trim()) return
     setLoading(true)
     try {
-      const { searchMeetings } = await import('../services/ai')
+      const { searchMeetings } = await import('../services/api')
       const res = await searchMeetings(q.trim())
       setResults(res)
     } catch {
@@ -159,18 +158,13 @@ export function SearchView() {
               const meeting = meetings.find(m => m.id === result.meetingId)!
               if (!meeting) return null
               const typeConfig = getMeetingTypeConfig(meeting.meetingType)
-              const isExpanded = expandedId === result.meetingId
 
               return (
-                <div
+                <button
                   key={result.meetingId}
-                  className="bg-fathom-surface border border-fathom-border-subtle rounded-xl overflow-hidden
-                             hover:border-fathom-border transition-colors"
+                  onClick={() => selectMeeting(result.meetingId)}
+                  className="w-full text-left bg-fathom-surface border border-fathom-border-subtle rounded-xl p-4 flex items-center gap-3 hover:border-fathom-border transition-colors"
                 >
-                  <button
-                    onClick={() => setExpandedId(isExpanded ? null : result.meetingId)}
-                    className="w-full text-left p-4 flex items-center gap-3"
-                  >
                     <div className="w-12 h-12 rounded-xl bg-fathom-elevated border border-fathom-border-subtle
                                     flex items-center justify-center text-sm font-bold text-fathom-text-secondary flex-shrink-0">
                       {meeting.recording.thumbnail}
@@ -193,61 +187,9 @@ export function SearchView() {
                         <TrendingUp size={12} />
                         {Math.round(result.score * 10)}%
                       </div>
-                      {isExpanded ? <ChevronUp size={16} className="text-fathom-text-tertiary" /> : <ChevronDown size={16} className="text-fathom-text-tertiary" />}
+                      <ArrowRight size={16} className="text-fathom-text-tertiary" />
                     </div>
                   </button>
-
-                  {isExpanded && (
-                    <div className="px-4 pb-4 border-t border-fathom-border-subtle animate-fade-in">
-                      <div className="pt-3 space-y-3">
-                        <div className="bg-fathom-bg rounded-lg p-3">
-                          <p className="text-xs font-medium text-fathom-text-tertiary mb-1">Match excerpt</p>
-                          <p className="text-sm text-fathom-text-secondary">{result.excerpt}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg
-                                             bg-fathom-accent hover:bg-fathom-accent-hover text-white text-xs
-                                             font-medium transition-colors">
-                            <MessageSquare size={12} />
-                            Ask about this meeting
-                            <ArrowRight size={12} />
-                          </button>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-fathom-text-tertiary mb-2">Key insights</p>
-                          <div className="space-y-1.5">
-                            {meeting.summary.keyTopics.slice(0, 3).map((topic, i) => (
-                              <div key={i} className="flex items-center gap-2 text-xs text-fathom-text-secondary">
-                                <div className="w-1.5 h-1.5 rounded-full bg-fathom-accent flex-shrink-0" />
-                                {topic}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-fathom-text-tertiary mb-2">Decisions</p>
-                          <div className="space-y-1">
-                            {meeting.summary.decisions.slice(0, 3).map((d, i) => (
-                              <div key={i} className="text-xs text-fathom-text-secondary bg-fathom-bg rounded-lg px-3 py-2">
-                                {d}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-fathom-text-tertiary mb-2">Participants</p>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {meeting.participants.map(p => (
-                              <span key={p.id} className="px-2 py-1 rounded-full bg-fathom-elevated text-xs text-fathom-text-secondary">
-                                {p.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
               )
             })}
             <div ref={endRef} />
