@@ -70,6 +70,18 @@ The frontend proxies `/api` requests to `http://localhost:8001`. Seed the config
 python backend/app/seed.py
 ```
 
+### Render Backend
+
+Create a Render Web Service with `backend` as its root directory. Use these settings:
+
+```text
+Runtime: Python 3
+Build Command: pip install -r requirements.txt
+Start Command: python run.py
+```
+
+Set `DATABASE_URL`, `GEMINI_API_KEY`, and `FRONTEND_ORIGIN` in the Render environment. Render supplies `PORT` automatically; `backend/run.py` uses it and runs without the development reload process.
+
 ## Available Scripts
 
 ```bash

@@ -8,6 +8,9 @@ import type {
   TranscriptSegment,
 } from '../types'
 
+const apiBaseUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+const apiUrl = (path: string) => `${apiBaseUrl}${path}`
+
 type BackendParticipant = {
   id: string
   name: string
@@ -197,18 +200,18 @@ function normalizeMeeting(raw: BackendMeeting): Meeting {
 }
 
 export async function fetchMeetings(): Promise<Meeting[]> {
-  const response = await fetch('/api/meetings')
+  const response = await fetch(apiUrl('/api/meetings'))
   const data = await handleResponse<MeetingsResponse>(response)
   return data.meetings.map(normalizeMeeting)
 }
 
 export async function fetchMeeting(id: string): Promise<Meeting> {
-  const response = await fetch(`/api/meetings/${id}`)
+  const response = await fetch(apiUrl(`/api/meetings/${id}`))
   return normalizeMeeting(await handleResponse<BackendMeeting>(response))
 }
 
 export async function fetchTranscript(meetingId: string): Promise<TranscriptSegment[]> {
-  const response = await fetch(`/api/meetings/${meetingId}/transcript`)
+  const response = await fetch(apiUrl(`/api/meetings/${meetingId}/transcript`))
   const data = await handleResponse<BackendTranscript[]>(response)
   return data.map(segment => ({
     id: segment.id,
@@ -220,12 +223,12 @@ export async function fetchTranscript(meetingId: string): Promise<TranscriptSegm
 }
 
 export async function fetchDecisions(meetingId: string): Promise<{ id: string; text: string; timestamp?: number }[]> {
-  const response = await fetch(`/api/meetings/${meetingId}/decisions`)
+  const response = await fetch(apiUrl(`/api/meetings/${meetingId}/decisions`))
   return handleResponse<BackendDecision[]>(response)
 }
 
 export async function fetchActions(meetingId: string): Promise<ActionItem[]> {
-  const response = await fetch(`/api/meetings/${meetingId}/actions`)
+  const response = await fetch(apiUrl(`/api/meetings/${meetingId}/actions`))
   const data = await handleResponse<BackendAction[]>(response)
   return data.map(action => ({
     id: action.id,
@@ -239,7 +242,7 @@ export async function fetchActions(meetingId: string): Promise<ActionItem[]> {
 }
 
 export async function fetchHighlights(meetingId: string): Promise<Highlight[]> {
-  const response = await fetch(`/api/meetings/${meetingId}/highlights`)
+  const response = await fetch(apiUrl(`/api/meetings/${meetingId}/highlights`))
   const data = await handleResponse<BackendHighlight[]>(response)
   return data.map(highlight => ({
     id: highlight.id,
@@ -253,7 +256,7 @@ export async function fetchHighlights(meetingId: string): Promise<Highlight[]> {
 }
 
 export async function toggleActionItemApi(meetingId: string, actionId: string, completed: boolean): Promise<ActionItem> {
-  const response = await fetch(`/api/actions/${actionId}`, {
+  const response = await fetch(apiUrl(`/api/actions/${actionId}`), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ completed }),
@@ -275,7 +278,7 @@ export async function queryMeeting(
   query: string,
   _history: ChatMessage[],
 ): Promise<{ answer: string; highlights: Highlight[] }> {
-  const response = await fetch(`/api/meetings/${meetingId}/ask`, {
+  const response = await fetch(apiUrl(`/api/meetings/${meetingId}/ask`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question: query }),
@@ -285,7 +288,7 @@ export async function queryMeeting(
 }
 
 export async function searchMeetings(query: string): Promise<{ meetingId: string; excerpt: string; score: number }[]> {
-  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+  const response = await fetch(apiUrl(`/api/search?q=${encodeURIComponent(query)}`))
   const data = await handleResponse<{ results: SearchResult[] }>(response)
   return data.results.flatMap(result => {
     const meetingId = result.meetingId ?? result.meeting_id
